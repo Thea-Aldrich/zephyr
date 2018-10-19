@@ -186,13 +186,11 @@ void main(void)
 	/*
 	 * INTIALIZE THE TEMPERATURE SENSOR
 	 */
-	printk("1\n");
     // Sensor array, one element per sensor being used.
     struct device *dev[ARRAY_SIZE(info)];
-    printk("2\n");
+
     // Struct to hold measurement from sensor
     struct sensor_value temperature_data;
-    printk("3\n");
 
 	// Bind sensor to device stuct
     for (int i = 0; i < ARRAY_SIZE(info); i++) {
@@ -203,15 +201,13 @@ void main(void)
     		printk("Sensor %s initialized\n", info[i].dev_name);
     	}
     }
-    printk("4\n");
 
-	printk("5\n");
 	// Populate the first sensor value
-	//sensor_sample_fetch(dev[0]);
-	printk("6\n");
-	//sensor_channel_get(dev[0], info[0].chan, &temperature_data);
-	printk("7\n");
-	//printk("SANITY CHECK: First temperature sensor reading: %d\n", temperature_data.val1);
+	sensor_sample_fetch(dev[0]);
+
+	sensor_channel_get(dev[0], info[0].chan, &temperature_data);
+	temperature = temperature_data.val1;
+	printk("SANITY CHECK: First temperature sensor reading: %d\n", temperature_data.val1);
 
 	/*
 	 * INITIALIZE THE BLUETOOTH SENSOR
@@ -231,9 +227,14 @@ void main(void)
 	 * of starting delayed work so we do it here
 	 */
 	while (1) {
-		k_sleep(1000);
-		printk("test");
+		k_sleep(1000); // Sleep for 1 second
 		/* Temperature measurement */
+		for (int i = 0; i < ARRAY_SIZE(info); i++) {
+			sensor_sample_fetch(dev[i]);
+		}
+		sensor_sample_fetch(dev[0]);
+		sensor_channel_get(dev[0], info[0].chan, &temperature_data);
+		temperature = temperature_data.val1;
 		//temperature_measurement_notify();
 	}
 }
