@@ -21,10 +21,11 @@
 #include <bluetooth/conn.h>
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
+#include <build/zephyr/misc/generated/syscalls_links/_home_marc_devel_zephyr_include/sensor.h>
 
 
 static u8_t temperature = 0;		//This variable holds the current measured temperature
-static struct sensor_value temperature_data;
+
 /*
  * SUMMARY: Uses helper function to read the current measured temperature into a response buffer when requested by
  * 	the other side of the bluetooth connection.
@@ -74,7 +75,7 @@ void temperature_measurement_notify(void)
 								// [1] = data primitive (the actual temperature)
 
 	// Poll the temperature sensor
-
+    sensor_channel_get()
 
 	// Pack the data
 	temp_data[0] = 0x06; /* uint8, sensor contact */
@@ -165,28 +166,30 @@ static struct channel_info temperature_sensor_config[] = {
 		{SENSOR_CHAN_TEMP, "HDC1008"}
 };
 
+// Sensor array, one element per sensor being used.
+static struct device *sensor_devices_array[ARRAY_SIZE(temperature_sensor_config)];
+
+// Struct to hold measurement from sensor
+struct sensor_value temperature_data;
+
 void main(void)
 {
 	/*
 	 * INTIALIZE THE TEMPERATURE SENSOR
 	 */
-	// Sensor array, one element per sensor being used.
-	struct device *sensor_device_array[ARRAY_SIZE(temperature_sensor_config)];
-
-	// Struct to hold measurement from sensor
-	struct sensor_value temperature_data;
 
 	// Bind sensor to device stuct
-	sensor_device_array[0] = device_get_binding(temperature_sensor_config[0].dev_name);
+	sensor_devices_array[0] = device_get_binding(temperature_sensor_config[0].dev_name);
 
 	// If initialized correctly this should NOT be null
-	if (sensor_device_array[0] == NULL) {
+	if (sensor_devices_array[0] == NULL) {
 		printk("ERROR: Sensor %s failed to initialize.\n", temperature_sensor_config[0].dev_name);
 	}
 
 	// Populate the first sensor value
-	sensor_channel_get(sensor_device_array[0], temperature_sensor_config[0].chan, &temperature);
-    printk("SANITY CHECK: First temperature sensor reading: %d\n", )
+	sensor_channel_get(sensor_devices_array[0], temperature_sensor_config[0].chan, &temperature);
+
+	printk("SANITY CHECK: First temperature sensor reading: %d\n", temperature_data.val1);
 
 	/*
 	 * INITIALIZE THE BLUETOOTH SENSOR
