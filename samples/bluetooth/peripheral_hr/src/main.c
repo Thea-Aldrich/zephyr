@@ -6,22 +6,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr.h>
 #include <zephyr/types.h>
-#include <device.h>
 #include <sensor.h>
+#include <device.h>
+#include <stdio.h>
 #include <stddef.h>
 #include <string.h>
 #include <errno.h>
 #include <misc/printk.h>
 #include <misc/byteorder.h>
-#include <zephyr.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/conn.h>
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
-#include <build/zephyr/misc/generated/syscalls_links/_home_marc_devel_zephyr_include/sensor.h>
 
 
 static u8_t temperature = 0;		//This variable holds the current measured temperature
@@ -34,13 +34,13 @@ static ssize_t read_temp(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 						 void *buf, u16_t len, u16_t offset)
 {
 	return bt_gatt_attr_read(conn,                 // Handed to us by the bluetooth stack
-			                 attr,                 // Handed to us by the bluetooth stack
-			                 buf,                  // Handed to us by the bluetooth stack
-			                 len,                  // Handed to us by the bluetooth stack
-			                 offset,               // Handed to us by the bluetooth stack
-			                 &temperature,         // Value to be pushed into buffer to send to requestor (other side of connection)
-							 sizeof(temperature)   // Size of value to be pushed
-							 );
+			        attr,                 // Handed to us by the bluetooth stack
+			        buf,                  // Handed to us by the bluetooth stack
+			        len,                  // Handed to us by the bluetooth stack
+			        offset,               // Handed to us by the bluetooth stack
+			        &temperature,         // Value to be pushed into buffer to send to requestor (other side of connection)
+				sizeof(temperature)   // Size of value to be pushed
+				        );
 }
 
 
@@ -53,12 +53,12 @@ static ssize_t read_temp(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 static struct bt_gatt_attr attrs[] = {
 		// Environmental Sensing Service bitmask defined in zephyr/include/bluetooth/uuid.h
 		BT_GATT_PRIMARY_SERVICE(BT_UUID_ESS),
-		BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE, //UUID defining what kind of characteristic (data) this is
-				               BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_READ, // Available Actions (read,write,notify,etc)
-							   BT_GATT_PERM_READ,                               // Available Permissions
-				               read_temp,                                    // Read callback function
-				               NULL,                                    // Write callback function
-				               &temperature								// Value this characteristic represents
+		BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE,     						//UUID defining what kind of characteristic (data) this is
+	    						BT_GATT_CHRC_READ,						        // Available Actions (read,write,notify,etc)
+	    						BT_GATT_PERM_READ,                              // Available Permissions
+								read_temp,                                      // Read callback function
+								NULL,                                           // Write callback function
+								&temperature                                    // Value this characteristic represents
 				               )
 };
 
@@ -75,7 +75,7 @@ void temperature_measurement_notify(void)
 								// [1] = data primitive (the actual temperature)
 
 	// Poll the temperature sensor
-    sensor_channel_get()
+    //sensor_channel_get(sensor_devices_array[0], temperature_sensor_config[0].chan, &temperature_data);
 
 	// Pack the data
 	temp_data[0] = 0x06; /* uint8, sensor contact */
@@ -156,40 +156,62 @@ static struct bt_conn_auth_cb auth_cb_display = {
 /*
  * TEMPERATURE SENSOR CONFIGURATION SECTION
  */
-#define SENSOR_CHAN_TEMP 14 //Which pin sensor is connected to (found via trial and error)
+#ifdef CONFIG_APDS9660_TRIGGER
+K_SEM_DEFINE(sem, 0, 1);
+static void trigger_handler(struct device *dev, struct sensor_trigger *trigger) {
+    ARG_UNUSED(dev);
+    ARG_UNUSED(trigger);
+
+    k_sem_give(&sem);
+}
+#endif
+
 struct channel_info {
 	int chan;
 	char *dev_name;
 };
 
-static struct channel_info temperature_sensor_config[] = {
-		{SENSOR_CHAN_TEMP, "HDC1008"}
+#define SENSOR_CHAN_TEMP 14 //Which pin sensor is connected to (found via trial and error)
+
+static struct channel_info info[] = {
+		{SENSOR_CHAN_TEMP, "HDC1008"},
+		{SENSOR_CHAN_HUMIDITY, "HDC1008"},
+		{SENSOR_CHAN_PROX, CONFIG_APDS9960_DRV_NAME},
+		{SENSOR_CHAN_LIGHT, CONFIG_APDS9960_DRV_NAME}
 };
 
-// Sensor array, one element per sensor being used.
-static struct device *sensor_devices_array[ARRAY_SIZE(temperature_sensor_config)];
-
-// Struct to hold measurement from sensor
-struct sensor_value temperature_data;
 
 void main(void)
 {
 	/*
 	 * INTIALIZE THE TEMPERATURE SENSOR
 	 */
+	printk("1\n");
+    // Sensor array, one element per sensor being used.
+    struct device *dev[ARRAY_SIZE(info)];
+    printk("2\n");
+    // Struct to hold measurement from sensor
+    struct sensor_value temperature_data;
+    printk("3\n");
 
 	// Bind sensor to device stuct
-	sensor_devices_array[0] = device_get_binding(temperature_sensor_config[0].dev_name);
+    for (int i = 0; i < ARRAY_SIZE(info); i++) {
+    	dev[i] = device_get_binding(info[i].dev_name);
+    	if (dev[i] == NULL) {
+    		printk("ERROR: Sensor %s failed to initialize\n", info[i].dev_name);
+    	} else {
+    		printk("Sensor %s initialized\n", info[i].dev_name);
+    	}
+    }
+    printk("4\n");
 
-	// If initialized correctly this should NOT be null
-	if (sensor_devices_array[0] == NULL) {
-		printk("ERROR: Sensor %s failed to initialize.\n", temperature_sensor_config[0].dev_name);
-	}
-
+	printk("5\n");
 	// Populate the first sensor value
-	sensor_channel_get(sensor_devices_array[0], temperature_sensor_config[0].chan, &temperature);
-
-	printk("SANITY CHECK: First temperature sensor reading: %d\n", temperature_data.val1);
+	//sensor_sample_fetch(dev[0]);
+	printk("6\n");
+	//sensor_channel_get(dev[0], info[0].chan, &temperature_data);
+	printk("7\n");
+	//printk("SANITY CHECK: First temperature sensor reading: %d\n", temperature_data.val1);
 
 	/*
 	 * INITIALIZE THE BLUETOOTH SENSOR
@@ -210,8 +232,8 @@ void main(void)
 	 */
 	while (1) {
 		k_sleep(1000);
-
+		printk("test");
 		/* Temperature measurement */
-		temperature_measurement_notify();
+		//temperature_measurement_notify();
 	}
 }
