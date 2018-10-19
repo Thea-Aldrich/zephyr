@@ -18,40 +18,13 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 #include <misc/byteorder.h>
+#include <buf.h>
 
 static struct bt_conn *default_conn;
 
-static void device_found(const bt_addr_le_t *addr, s8_t rssi, u8_t type,
-			 struct net_buf_simple *ad)
-{
-	char addr_str[BT_ADDR_LE_STR_LEN];
-
-	if (default_conn) {
-		return;
-	}
-
-	/* We're only interested in connectable events */
-	if (type != BT_LE_ADV_IND && type != BT_LE_ADV_DIRECT_IND) {
-		return;
-	}
-
-	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
-	printk("Device found: %s (RSSI %d)\n", addr_str, rssi);
-
-	/* connect only to devices in close proximity */
-	if (rssi < -70) {
-		return;
-	}
-
-	if (bt_le_scan_stop()) {
-		return;
-	}
-
-	default_conn = bt_conn_create_le(addr, BT_LE_CONN_PARAM_DEFAULT);
-}
-
 static void connected(struct bt_conn *conn, u8_t err)
 {
+    printk("Connection callback!\n");
 	char addr[BT_ADDR_LE_STR_LEN];
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
@@ -67,7 +40,28 @@ static void connected(struct bt_conn *conn, u8_t err)
 
 	printk("Connected: %s\n", addr);
 
-	bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+	/*
+	 * START: Logic to grab values and pass them to RasPi
+	 */
+
+	// Poll sensors
+
+	// Read sensors
+
+	// Prepare for send
+	// Create net buffer
+	//https://docs.zephyrproject.org/latest/api/networking.html#_CPPv37net_buf
+
+	// Copy sensor values into buffer
+    
+    // Send packet
+	// USE RFCOMM SEND
+    // https://docs.zephyrproject.org/latest/api/bluetooth.html#_CPPv318bt_rfcomm_dlc_sendP13bt_rfcomm_dlcP7net_buf
+    // int bt_rfcomm_dlc_send(struct bt_rfcomm_dlc *dlc, struct net_buf *buf)
+
+
+	// Disconnect
+	//bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 }
 
 static void disconnected(struct bt_conn *conn, u8_t reason)
@@ -100,23 +94,35 @@ static struct bt_conn_cb conn_callbacks = {
 
 void main(void)
 {
-	int err;
-
+	/*
+	 * INITIALIZE BLUETOOTH RADIO
+	 */
+	int err; // Used to store error code
+    // Turn on bluetooth radio
 	err = bt_enable(NULL);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
 	}
-
 	printk("Bluetooth initialized\n");
 
 	bt_conn_cb_register(&conn_callbacks);
 
-	err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, device_found);
-	if (err) {
-		printk("Scanning failed to start (err %d)\n", err);
-		return;
-	}
+//	err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, device_found);
+//	if (err) {
+//		printk("Scanning failed to start (err %d)\n", err);
+//		return;
+//	}
+	const bt_addr_le_t raspi = { 0, { {52, 226, 113, 235, 39, 184} } };
+    default_conn = bt_conn_create_le(&raspi, BT_LE_CONN_PARAM_DEFAULT);
 
-	printk("Scanning successfully started\n");
+    err = bt_le_set_auto_conn(&raspi, BT_LE_CONN_PARAM_DEFAULT);
+    if (err) {
+        printk("ERROR: BLE Auto connect failed with:\n\t%d", err);
+    }
+
+    // Make Raspi address into string to print it out
+    char raspi_addr[BT_ADDR_LE_STR_LEN];
+    bt_addr_le_to_str(&raspi, raspi_addr, sizeof(raspi_addr));
+	printk("BLE auto connection started: Trying to connect to %s\n", raspi_addr);
 }
